@@ -13,6 +13,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export function setupRoutes(app: express.Application) {
   
+  // Landing page
+  app.get('/', (req, res) => {
+    const html = readFileSync(join(process.cwd(), 'client/src/pages/landing.html'), 'utf-8');
+    res.send(html);
+  });
+
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
   });
