@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Update Payment Method</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    body { font-family: system-ui; max-width: 500px; margin: 50px auto; padding: 20px; }
+    h1 { color: #333; }
+    #card-element { border: 1px solid #ccc; padding: 12px; border-radius: 4px; margin: 20px 0; }
+    button { background: #635bff; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>💳 Update Your Payment Method</h1>
+  <p>Please update your card to retry the payment.</p>
+  
+  <form id="payment-form">
+    <div id="card-element"></div>
+    <div id="error"></div>
+    <button type="submit">Update Card</button>
+  </form>
+  
+  <div id="success" style="display:none; color: green;">✅ Updated!</div>
+</body>
+</html>
