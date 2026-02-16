@@ -9,17 +9,22 @@
     body { font-family: -apple-system, system-ui, sans-serif; background: #f5f5f5; }
     .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
     .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .header-right { display: flex; gap: 10px; align-items: center; }
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
     .stat-card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .stat-value { font-size: 32px; font-weight: bold; color: #667eea; margin: 10px 0; }
     .stat-label { color: #666; font-size: 14px; }
     .table-container { background: white; padding: 20px; border-radius: 8px; }
+    .connect-banner { background: #fef3c7; border: 2px solid #fbbf24; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+    .connect-banner h3 { color: #92400e; margin-bottom: 10px; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; padding: 12px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; }
     td { padding: 12px; border-bottom: 1px solid #f0f0f0; }
-    button { background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 8px; }
+    button { background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px; }
     button:hover { background: #5568d3; }
     .logout-btn { background: #dc2626; }
+    .connect-btn { background: #6366f1; font-size: 16px; padding: 12px 24px; }
+    .connected-badge { background: #10b981; color: white; padding: 6px 12px; border-radius: 4px; font-size: 14px; }
     .status-failed { color: #dc2626; font-weight: 600; }
     .status-recovered { color: #16a34a; font-weight: 600; }
   </style>
@@ -28,7 +33,16 @@
   <div class="container">
     <div class="header">
       <h1>💳 Retainr Dashboard</h1>
-      <button class="logout-btn" onclick="logout()">Logout</button>
+      <div class="header-right">
+        <div id="stripeStatus"></div>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div id="connectBanner" style="display: none;" class="connect-banner">
+      <h3>⚠️ Connect Your Stripe Account</h3>
+      <p>Connect your Stripe account to start recovering failed payments</p>
+      <button class="connect-btn" onclick="connectStripe()">Connect Stripe Account</button>
     </div>
 
     <div class="stats">
@@ -71,9 +85,272 @@
   </div>
 
   <script>
+    let userConnected = false;
+
+    async function checkUser() {
+      try {
+        const res = await fe
+nano .env
+
+// SUBSCRIPTION BILLING ROUTES
+  app.post('/api/stripe/checkout', requireAuth, express.json(), async (req, res) => {
+    try {
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, req.session.userId!),
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (!process.env.STRIPE_PRICE_ID) {
+        return res.status(500).json({ error: 'Stripe price not configured' });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer_email: user.email,
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [{
+          price: process.env.STRIPE_PRICE_ID,
+          quantity: 1,
+        }],
+        subscription_data: {
+          trial_period_days: 14,
+          metadata: {
+            userId: user.id.toString(),
+          },
+        },
+        success_url: `${process.env.BASE_URL}/dashboard?checkout=success`,
+        cancel_url: `${process.env.BASE_URL}/dashboard`,
+        metadata: {
+          userId: user.id.toString(),
+        },
+      });
+
+      logger.info({ userId: user.id, sessionId: session.id }, 'Checkout session created');
+      res.json({ url: session.url });
+    } catch (error) {
+      logger.error({ error }, 'Checkout session error');
+      res.status(500).json({ error: 'Failed to create checkout session' });
+    }
+  });
+case 'checkout.session.completed':
+          await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+          break;
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted':
+          await handleSubscriptionChange(event.data.object as Stripe.Subscription);
+          break;
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const userId = parseInt(session.metadata?.userId || '0');
+  
+  if (!userId) {
+    logger.error({ sessionId: session.id }, 'No userId in checkout metadata');
+    return;
+  }
+
+  await db.update(users)
+    .set({
+      subscriptionStatus: 'active',
+      subscriptionId: session.subscription as string,
+    })
+    .where(eq(users.id, userId));
+
+  logger.info({ userId, subscriptionId: session.subscription }, 'Subscription activated');
+}
+
+async function handleSubscriptionChange(subscription: Stripe.Subscription) {
+  const userId = parseInt(subscription.metadata?.userId || '0');
+  
+  if (!userId) {
+    logger.warn({ subscriptionId: subscription.id }, 'No userId in subscription metadata');
+    return;
+  }
+
+  const status = subscription.status === 'active' ? 'active' :
+                 subscription.status === 'past_due' ? 'past_due' : 'canceled';
+
+  await db.update(users)
+    .set({ subscriptionStatus: status })
+    .where(eq(users.id, userId));
+
+  logger.info({ userId, status }, 'Subscription status updated');
+}
+cat > client/src/pages/dashboard.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard - Retainr</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, system-ui, sans-serif; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .header-right { display: flex; gap: 10px; align-items: center; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+    .stat-card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stat-value { font-size: 32px; font-weight: bold; color: #667eea; margin: 10px 0; }
+    .stat-label { color: #666; font-size: 14px; }
+    .table-container { background: white; padding: 20px; border-radius: 8px; }
+    .trial-banner { background: #dbeafe; border: 2px solid #3b82f6; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+    .trial-banner h3 { color: #1e40af; margin-bottom: 10px; }
+    .connect-banner { background: #fef3c7; border: 2px solid #fbbf24; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+    .connect-banner h3 { color: #92400e; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 12px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; }
+    td { padding: 12px; border-bottom: 1px solid #f0f0f0; }
+    button { background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px; }
+    button:hover { background: #5568d3; }
+    .logout-btn { background: #dc2626; }
+    .upgrade-btn { background: #3b82f6; font-size: 16px; padding: 12px 24px; }
+    .connect-btn { background: #6366f1; font-size: 16px; padding: 12px 24px; }
+    .badge { color: white; padding: 6px 12px; border-radius: 4px; font-size: 14px; }
+    .badge-trial { background: #3b82f6; }
+    .badge-active { background: #10b981; }
+    .badge-expired { background: #dc2626; }
+    .status-failed { color: #dc2626; font-weight: 600; }
+    .status-recovered { color: #16a34a; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💳 Retainr Dashboard</h1>
+      <div class="header-right">
+        <div id="subscriptionBadge"></div>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div id="trialBanner" style="display: none;" class="trial-banner">
+      <h3>🎉 Free Trial Active</h3>
+      <p id="trialMessage">You have 14 days remaining in your free trial</p>
+      <button class="upgrade-btn" onclick="startSubscription()">Upgrade to Pro - $49/mo</button>
+    </div>
+
+    <div id="connectBanner" style="display: none;" class="connect-banner">
+      <h3>⚠️ Connect Your Stripe Account</h3>
+      <p>Connect your Stripe account to start recovering failed payments</p>
+      <button class="connect-btn" onclick="connectStripe()">Connect Stripe Account</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Recovered This Month</div>
+        <div class="stat-value" id="recoveredAmount">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Recovery Rate</div>
+        <div class="stat-value" id="recoveryRate">0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Failures</div>
+        <div class="stat-value" id="activeFailures">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Recovered</div>
+        <div class="stat-value" id="totalRecovered">0</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <h2>Recent Failed Payments</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Reason</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="paymentsTable">
+          <tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+
+    async function checkUser() {
+      try {
+        const res = await fetch('/api/user');
+        currentUser = await res.json();
+        
+        // Show subscription status
+        if (currentUser.subscriptionStatus === 'active') {
+          document.getElementById('subscriptionBadge').innerHTML = '<span class="badge badge-active">✓ Pro</span>';
+          document.getElementById('trialBanner').style.display = 'none';
+        } else if (currentUser.subscriptionStatus === 'trial') {
+          const daysLeft = Math.ceil((new Date(currentUser.trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24));
+          document.getElementById('subscriptionBadge').innerHTML = '<span class="badge badge-trial">Trial</span>';
+          document.getElementById('trialMessage').textContent = `You have ${daysLeft} days remaining in your free trial`;
+          document.getElementById('trialBanner').style.display = 'block';
+        } else {
+          document.getElementById('subscriptionBadge').innerHTML = '<span class="badge badge-expired">Expired</span>';
+        }
+
+        // Show connect banner if not connected
+        if (!currentUser.stripeAccountId) {
+          document.getElementById('connectBanner').style.display = 'block';
+        }
+
+        return currentUser;
+      } catch (error) {
+        window.location.href = '/login';
+      }
+    }
+
+    async function startSubscription() {
+      try {
+        const res = await fetch('/api/stripe/checkout', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        window.location.href = data.url;
+      } catch (error) {
+        alert('Failed to start subscription');
+      }
+    }
+
+    async function connectStripe() {
+      try {
+        const res = await fetch('/api/stripe/connect');
+        const data = await res.json();
+        window.location.href = data.url;
+      } catch (error) {
+        alert('Failed to initiate Stripe connection');
+      }
+    }
+
     async function loadDashboard() {
+      await checkUser();
+
+      if (!currentUser.stripeAccountId) {
+        document.getElementById('paymentsTable').innerHTML = 
+          '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">Connect your Stripe account to see failed payments</td></tr>';
+        return;
+      }
+
       try {
         const statsRes = await fetch('/api/dashboard/stats');
+        if (!statsRes.ok) {
+          if (statsRes.status === 402) {
+            document.getElementById('paymentsTable').innerHTML = 
+              '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">Subscription required. Please upgrade to continue.</td></tr>';
+            return;
+          }
+          throw new Error('Failed to load stats');
+        }
+        
         const stats = await statsRes.json();
         
         document.getElementById('recoveredAmount').textContent = '$' + stats.recoveredThisMonth.toFixed(2);
@@ -82,11 +359,13 @@
         document.getElementById('totalRecovered').textContent = stats.totalRecovered;
 
         const paymentsRes = await fetch('/api/failed-payments');
+        if (!paymentsRes.ok) throw new Error('Failed to load payments');
+        
         const payments = await paymentsRes.json();
         
         const tbody = document.getElementById('paymentsTable');
         if (payments.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">No failed payments yet. Connect your Stripe account to start.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">No failed payments yet</td></tr>';
           return;
         }
 
@@ -107,70 +386,45 @@
         `).join('');
       } catch (error) {
         console.error('Error loading dashboard:', error);
-        if (error.message.includes('401')) {
-          window.location.href = '/login';
-        }
       }
     }
 
     async function retry(id) {
       try {
         const res = await fetch(`/api/failed-payments/${id}/retry`, { method: 'POST' });
-        const da
-// Dashboard page
-  app.get('/dashboard', (req, res) => {
-    if (!req.session.userId) {
-      return res.redirect('/');
+        const data = await res.json();
+        alert(data.message);
+        loadDashboard();
+      } catch (error) {
+        alert('Retry failed');
+      }
     }
-    try {
-      const html = readFileSync(join(process.cwd(), 'client/src/pages/dashboard.html'), 'utf-8');
-      res.send(html);
-    } catch (error) {
-      res.status(500).send('Dashboard not found');
+
+    async function sendEmail(id) {
+      try {
+        const res = await fetch(`/api/failed-payments/${id}/send-email`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message);
+      } catch (error) {
+        alert('Send email failed');
+      }
     }
-  });
-cat > client/src/pages/landing.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Retainr - Recover Failed Stripe Payments</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; }
-    .hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 100px 20px; text-align: center; }
-    h1 { font-size: 48px; margin-bottom: 20px; }
-    .subtitle { font-size: 24px; margin-bottom: 40px; opacity: 0.9; }
-    .cta { background: white; color: #667eea; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px; display: inline-block; margin: 0 10px; }
-    .cta:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: all 0.2s; }
-    .cta-secondary { background: transparent; border: 2px solid white; color: white; }
-    .features { max-width: 1200px; margin: 80px auto; padding: 0 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; }
-    .feature { text-align: center; }
-    .feature h3 { margin: 20px 0; font-size: 24px; }
-  </style>
-</head>
-<body>
-  <div class="hero">
-    <h1>💳 Retainr</h1>
-    <p class="subtitle">Recover failed Stripe payments automatically</p>
-    <a href="/register" class="cta">Start Free Trial</a>
-    <a href="/login" class="cta cta-secondary">Login</a>
-  </div>
-  
-  <div class="features">
-    <div class="feature">
-      <h3>⚡ Automatic Dunning</h3>
-      <p>Send branded recovery emails when payments fail</p>
-    </div>
-    <div class="feature">
-      <h3>🔗 One-Click Updates</h3>
-      <p>Customers update their card in seconds</p>
-    </div>
-    <div class="feature">
-      <h3>💰 Recover Revenue</h3>
-      <p>Recover 30-50% of failed charges</p>
-    </div>
-  </div>
+
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    }
+
+    // Check URL params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success') {
+      setTimeout(() => {
+        alert('✓ Subscription activated! Welcome to Retainr Pro');
+        window.history.replaceState({}, '', '/dashboard');
+      }, 500);
+    }
+
+    loadDashboard();
+  </script>
 </body>
 </html>
