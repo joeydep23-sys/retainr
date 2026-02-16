@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard - Retainr</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, system-ui, sans-serif; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+    .stat-card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stat-value { font-size: 32px; font-weight: bold; color: #667eea; margin: 10px 0; }
+    .stat-label { color: #666; font-size: 14px; }
+    .table-container { background: white; padding: 20px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 12px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; }
+    td { padding: 12px; border-bottom: 1px solid #f0f0f0; }
+    button { background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 8px; }
+    button:hover { background: #5568d3; }
+    .logout-btn { background: #dc2626; }
+    .status-failed { color: #dc2626; font-weight: 600; }
+    .status-recovered { color: #16a34a; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💳 Retainr Dashboard</h1>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Recovered This Month</div>
+        <div class="stat-value" id="recoveredAmount">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Recovery Rate</div>
+        <div class="stat-value" id="recoveryRate">0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Failures</div>
+        <div class="stat-value" id="activeFailures">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Recovered</div>
+        <div class="stat-value" id="totalRecovered">0</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <h2>Recent Failed Payments</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Reason</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="paymentsTable">
+          <tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function loadDashboard() {
+      try {
+        const statsRes = await fetch('/api/dashboard/stats');
+        const stats = await statsRes.json();
+        
+        document.getElementById('recoveredAmount').textContent = '$' + stats.recoveredThisMonth.toFixed(2);
+        document.getElementById('recoveryRate').textContent = stats.recoveryRate + '%';
+        document.getElementById('activeFailures').textContent = stats.activeFailures;
+        document.getElementById('totalRecovered').textContent = stats.totalRecovered;
+
+        const paymentsRes = await fetch('/api/failed-payments');
+        const payments = await paymentsRes.json();
+        
+        const tbody = document.getElementById('paymentsTable');
+        if (payments.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">No failed payments yet. Connect your Stripe account to start.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = payments.data.map(p => `
+          <tr>
+            <td>${p.customerEmail}</td>
+            <td>$${(p.amount / 100).toFixed(2)}</td>
+            <td class="status-${p.status}">${p.status}</td>
+            <td>${p.failureReason || 'N/A'}</td>
+            <td>${new Date(p.createdAt).toLocaleDateString()}</td>
+            <td>
+              ${p.status === 'failed' ? `
+                <button onclick="retry(${p.id})">Retry</button>
+                <button onclick="sendEmail(${p.id})">Send Email</button>
+              ` : ''}
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+        if (error.message.includes('401')) {
+          window.location.href = '/login';
+        }
+      }
+    }
+
+    async function retry(id) {
+      try {
+        const res = await fetch(`/api/failed-payments/${id}/retry`, { method: 'POST' });
+        const da
+// Dashboard page
+  app.get('/dashboard', (req, res) => {
+    if (!req.session.userId) {
+      return res.redirect('/');
+    }
+    try {
+      const html = readFileSync(join(process.cwd(), 'client/src/pages/dashboard.html'), 'utf-8');
+      res.send(html);
+    } catch (error) {
+      res.status(500).send('Dashboard not found');
+    }
+  });
+cat > client/src/pages/landing.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Retainr - Recover Failed Stripe Payments</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; }
+    .hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 100px 20px; text-align: center; }
+    h1 { font-size: 48px; margin-bottom: 20px; }
+    .subtitle { font-size: 24px; margin-bottom: 40px; opacity: 0.9; }
+    .cta { background: white; color: #667eea; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px; display: inline-block; margin: 0 10px; }
+    .cta:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: all 0.2s; }
+    .cta-secondary { background: transparent; border: 2px solid white; color: white; }
+    .features { max-width: 1200px; margin: 80px auto; padding: 0 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; }
+    .feature { text-align: center; }
+    .feature h3 { margin: 20px 0; font-size: 24px; }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>💳 Retainr</h1>
+    <p class="subtitle">Recover failed Stripe payments automatically</p>
+    <a href="/register" class="cta">Start Free Trial</a>
+    <a href="/login" class="cta cta-secondary">Login</a>
+  </div>
+  
+  <div class="features">
+    <div class="feature">
+      <h3>⚡ Automatic Dunning</h3>
+      <p>Send branded recovery emails when payments fail</p>
+    </div>
+    <div class="feature">
+      <h3>🔗 One-Click Updates</h3>
+      <p>Customers update their card in seconds</p>
+    </div>
+    <div class="feature">
+      <h3>💰 Recover Revenue</h3>
+      <p>Recover 30-50% of failed charges</p>
+    </div>
+  </div>
+</body>
+</html>
